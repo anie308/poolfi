@@ -1,0 +1,13 @@
+providers = ['node']
+
+[phases.setup]
+nixPkgs = ['nodejs']
+
+[phases.install]
+cmds = ['cd frontend && npm install']
+
+[phases.build]
+cmds = ['cd frontend && npm run build']
+
+[start]
+cmd = 'cd frontend && npm start'

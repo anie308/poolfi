@@ -1,0 +1,35 @@
+{
+  "name": "poolfi-contracts",
+  "version": "1.0.0",
+  "description": "PoolFi smart contracts for Celo blockchain",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:alfajores": "hardhat run scripts/deploy.js --network alfajores",
+    "deploy:celo": "hardhat run scripts/deploy.js --network celo",
+    "verify": "hardhat verify",
+    "node": "hardhat node",
+    "clean": "hardhat clean",
+    "export-abi": "node scripts/export-abi.js",
+    "build": "npm run compile && npm run export-abi"
+  },
+  "keywords": [
+    "celo",
+    "solidity",
+    "smart-contracts",
+    "poolfi",
+    "savings-pool"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.0",
+    "hardhat": "^2.19.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1"
+  }
+}
+
