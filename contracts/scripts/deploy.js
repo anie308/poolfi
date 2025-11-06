@@ -14,7 +14,7 @@ async function main() {
   console.log("Chain ID:", (await hre.ethers.provider.getNetwork()).chainId);
 
   // Verify contract on CeloScan (optional)
-  if (hre.network.name === "celo" || hre.network.name === "alfajores") {
+  if (hre.network.name === "celo" || hre.network.name === "alfajores" || hre.network.name === "sepolia") {
     console.log("\nWaiting for block confirmations...");
     await poolManager.deploymentTransaction().wait(5);
 

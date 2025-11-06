@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance } from 'wagmi'
 import { parseEther, formatEther, createPublicClient, http, getContract } from 'viem'
 import { PoolManagerABI } from '@/lib/contracts/abi'
 import { POOL_MANAGER_ADDRESS, isContractDeployed } from '@/lib/contracts/contractConfig'
@@ -52,6 +52,7 @@ export function usePoolManager() {
               deadline: poolInfo.basic.deadline,
               active: poolInfo.basic.isActive,
               completed: poolInfo.basic.isCompleted,
+              isRefundable: poolInfo.basic.isRefundable,
             })
           }
         }
@@ -84,6 +85,7 @@ async function fetchPoolInfo(poolId: number): Promise<{
     deadline: bigint
     isActive: boolean
     isCompleted: boolean
+    isRefundable: boolean
   }
   financial: {
     targetAmount: bigint
@@ -99,9 +101,9 @@ async function fetchPoolInfo(poolId: number): Promise<{
     // Create a public client for reading contract data
     const publicClient = createPublicClient({
       chain: {
-        id: 42220,
-        name: 'Celo',
-        network: 'celo',
+        id: 11142220,
+        name: 'Celo Sepolia',
+        network: 'celo-sepolia',
         nativeCurrency: {
           decimals: 18,
           name: 'CELO',
@@ -109,17 +111,17 @@ async function fetchPoolInfo(poolId: number): Promise<{
         },
         rpcUrls: {
           default: {
-            http: [process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo.org'],
+            http: [process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo-sepolia.celo-testnet.org'],
           },
           public: {
-            http: [process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo.org'],
+            http: [process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo-sepolia.celo-testnet.org'],
           },
         },
         blockExplorers: {
-          default: { name: 'Celo Explorer', url: 'https://explorer.celo.org' },
+          default: { name: 'Celo Explorer', url: 'https://sepolia.celoscan.io' },
         },
       },
-      transport: http(process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo.org'),
+      transport: http(process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo-sepolia.celo-testnet.org'),
     })
 
     const contract = getContract({
@@ -141,7 +143,8 @@ async function fetchPoolInfo(poolId: number): Promise<{
         name: basicInfo[2],
         deadline: basicInfo[3],
         isActive: basicInfo[4],
-        isCompleted: basicInfo[5]
+        isCompleted: basicInfo[5],
+        isRefundable: basicInfo[6] // New field from updated contract
       },
       financial: {
         targetAmount: financialInfo[0],
@@ -284,28 +287,88 @@ export function useWithdraw() {
 }
 
 
+// Hook to mark pool as failed (enables refunds)
+export function useMarkPoolAsFailed() {
+  const { writeContract, data, isPending, error } = useWriteContract()
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash: data,
+  })
+
+  const markPoolAsFailed = (poolId: number) => {
+    if (!isContractDeployed) return
+
+    writeContract({
+      address: POOLFI_ADDRESS as `0x${string}`,
+      abi: PoolManagerABI,
+      functionName: 'markPoolAsFailed',
+      args: [BigInt(poolId)]
+    })
+  }
+
+  return {
+    markPoolAsFailed,
+    isLoading: isPending || isConfirming,
+    isSuccess,
+    error
+  }
+}
+
+// Hook to refund from a failed pool
+export function useRefund() {
+  const { writeContract, data, isPending, error } = useWriteContract()
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash: data,
+  })
+
+  const refund = (poolId: number) => {
+    if (!isContractDeployed) return
+
+    writeContract({
+      address: POOLFI_ADDRESS as `0x${string}`,
+      abi: PoolManagerABI,
+      functionName: 'refund',
+      args: [BigInt(poolId)]
+    })
+  }
+
+  return {
+    refund,
+    isLoading: isPending || isConfirming,
+    isSuccess,
+    error
+  }
+}
+
+// Hook to get user's contribution amount for a pool
+export function useContributionAmount(poolId: number) {
+  const { address } = useAccount()
+  
+  const { data: amount } = useReadContract({
+    address: isContractDeployed ? POOLFI_ADDRESS : undefined,
+    abi: PoolManagerABI,
+    functionName: 'getContributionAmount',
+    args: address ? [BigInt(poolId), address] : undefined
+  })
+
+  return {
+    amount: amount ? formatEther(amount as bigint) : '0',
+    isLoading: false
+  }
+}
+
 // Hook to get user's CELO token balance from wallet
 export function useCELOBalance() {
   const { address } = useAccount()
   
-  // Get native CELO balance from wallet
-  const { data: balance } = useReadContract({
+  // Get native CELO balance using useBalance hook from wagmi
+  const { data: balance } = useBalance({
     address: address,
-    abi: [
-      {
-        "inputs": [{"internalType": "address", "name": "account", "type": "address"}],
-        "name": "balanceOf",
-        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-        "stateMutability": "view",
-        "type": "function"
-      }
-    ],
-    functionName: 'balanceOf',
-    args: address ? [address] : undefined
   })
 
   return {
-    balance: balance ? formatEther(balance as bigint) : '0',
+    balance: balance ? formatEther(balance.value) : '0',
     isLoading: false
   }
 }

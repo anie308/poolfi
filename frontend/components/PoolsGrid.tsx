@@ -26,24 +26,30 @@ export default function PoolsGrid() {
   const formattedPools = formatPools(pools)
 
   return (
-    <div className="mx-5">
-      <h2 className="text-xl font-semibold text-gray-900 mb-4 mt-8">Your Pools ({poolCount})</h2>
+    <div>
+      <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-4 md:mb-6 flex items-center gap-2">
+        <span>Your Pools</span>
+        <span className="px-2.5 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs md:text-sm font-semibold">
+          {poolCount}
+        </span>
+      </h2>
       {formattedPools.length === 0 ? (
-        <div className="text-center py-8">
-          <p className="text-gray-500 mb-4">No pools created yet</p>
-          <p className="text-sm text-gray-400">Create your first pool to get started!</p>
+        <div className="text-center py-8 md:py-12 bg-white rounded-lg border border-gray-200">
+          <div className="w-16 h-16 md:w-20 md:h-20 mx-auto mb-4 rounded-lg bg-blue-100 flex items-center justify-center">
+            <svg className="w-8 h-8 md:w-10 md:h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+          </div>
+          <p className="text-gray-700 font-semibold mb-2 text-sm md:text-base">No pools created yet</p>
+          <p className="text-xs md:text-sm text-gray-500">Create your first pool to get started!</p>
         </div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {formattedPools.map((pool, index) => (
           <div
             key={index}
             onClick={() => router.push(`/pool/${pool.id}`)}
-            className="rounded-2xl p-4 hover:opacity-80 transition-opacity flex-shrink-0 w-72 cursor-pointer"
-            style={{
-              backgroundColor: '#eff6ff',
-              border: '1px solid #d9e3f6'
-            }}
+            className="bg-white rounded-lg border border-gray-200 p-4 md:p-6 cursor-pointer hover:border-blue-500 hover:shadow-md transition-all duration-200"
           >
             {/* Header with pool name and circular progress */}
             <div className="flex justify-between items-start mb-6">
@@ -51,7 +57,7 @@ export default function PoolsGrid() {
                 <div className="flex items-center gap-2 mb-3">
                   <h3 className="font-semibold" style={{ fontSize: '16px', color: '#141b34' }}>{pool.name}</h3>
                   {pool.isUserCreated && (
-                    <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full">
+                    <span className="text-xs px-2.5 py-1 bg-green-500 text-white rounded-full font-semibold">
                       Your Pool
                     </span>
                   )}
@@ -95,20 +101,20 @@ export default function PoolsGrid() {
             </div>
             
             {/* Pool details */}
-            <div className="space-y-2">
+            <div className="space-y-2.5 mt-4 pt-4 border-t border-gray-100">
               <div className="flex justify-between items-center">
-                <span className="font-semibold" style={{ fontSize: '8px', color: '#7fd1b9' }}>Contribute</span>
-                <span className="font-semibold" style={{ fontSize: '8px', color: '#7fd1b9' }}>{pool.contributionAmount} CELO/month</span>
+                <span className="text-xs font-medium text-gray-500">Contribute</span>
+                <span className="text-xs font-bold text-blue-600">{pool.contributionAmount} CELO/month</span>
               </div>
               
               <div className="flex justify-between items-center">
-                <span className="font-semibold" style={{ fontSize: '8px', color: '#eac382' }}>Target</span>
-                <span className="font-semibold" style={{ fontSize: '8px', color: '#eac382' }}>{pool.targetAmount} CELO</span>
+                <span className="text-xs font-medium text-gray-500">Target</span>
+                <span className="text-xs font-bold text-indigo-600">{pool.targetAmount} CELO</span>
               </div>
               
               <div className="flex justify-between items-center">
-                <span className="font-semibold" style={{ fontSize: '8px', color: '#eac382' }}>Payout Date</span>
-                <span className="font-semibold" style={{ fontSize: '8px', color: '#eac382' }}>{pool.payoutDate}</span>
+                <span className="text-xs font-medium text-gray-500">Payout Date</span>
+                <span className="text-xs font-semibold text-gray-700">{pool.payoutDate}</span>
               </div>
             </div>
           </div>

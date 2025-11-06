@@ -3,11 +3,11 @@
 import { defineChain } from 'viem'
 import { getDefaultConfig } from '@rainbow-me/rainbowkit'
 
-// Define Celo chain
+// Define Celo Sepolia Testnet chain
 const celoChain = defineChain({
-  id: 42220,
-  name: 'Celo',
-  network: 'celo',
+  id: 11142220,
+  name: 'Celo Sepolia',
+  network: 'celo-sepolia',
   nativeCurrency: {
     decimals: 18,
     name: 'CELO',
@@ -15,14 +15,14 @@ const celoChain = defineChain({
   },
   rpcUrls: {
     default: {
-      http: [process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo.org'],
+      http: [process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo-sepolia.celo-testnet.org'],
     },
     public: {
-      http: [process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo.org'],
+      http: [process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo-sepolia.celo-testnet.org'],
     },
   },
   blockExplorers: {
-    default: { name: 'Celo Explorer', url: 'https://explorer.celo.org' },
+    default: { name: 'Celo Explorer', url: 'https://sepolia.celoscan.io' },
   },
 })
 

@@ -24,19 +24,20 @@ export default function ActionButtons({
 
   if (isDesktop) {
     return (
-      <div className="grid grid-cols-2 gap-6 my-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
         {buttons.map((button, index) => (
           <button
             key={index}
             onClick={button.onClick}
-            className="glass-card rounded-2xl p-6 flex items-center gap-4 hover:transform hover:-translate-y-1 hover:shadow-2xl transition-all duration-300"
+            className="bg-white rounded-lg border border-gray-200 p-4 md:p-6 flex flex-col items-center gap-3 md:gap-4 hover:border-blue-500 hover:shadow-md transition-all duration-200"
           >
-            <div className="w-20 h-20 gradient-card rounded-xl flex items-center justify-center text-white text-2xl">
+            <div className="w-12 h-12 md:w-16 md:h-16 bg-blue-600 rounded-lg flex items-center justify-center text-white text-xl md:text-2xl">
               {button.isImage ? (
                 <img 
                   src={button.icon} 
                   alt={button.label} 
-                  className="w-12 h-12"
+                  className="w-8 h-8 md:w-10 md:h-10"
+                  style={{ filter: 'brightness(0) invert(1)' }}
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
                   }}
@@ -45,7 +46,7 @@ export default function ActionButtons({
                 button.icon
               )}
             </div>
-            <span className="text-sm font-medium text-blue-600">{button.label}</span>
+            <span className="text-xs md:text-sm font-semibold text-gray-700 text-center">{button.label}</span>
           </button>
         ))}
       </div>
@@ -53,30 +54,31 @@ export default function ActionButtons({
   }
 
   return (
-    <div className="flex justify-center gap-10 my-6">
+    <div className="flex justify-center gap-8 my-8">
       {buttons.map((button, index) => (
         <button
           key={index}
           onClick={button.onClick}
-          className="flex flex-col items-center gap-2"
+          className="flex flex-col items-center gap-3 group"
         >
-          <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center text-2xl">
+          <div className="w-20 h-20 bg-blue-600 rounded-lg flex items-center justify-center text-2xl shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all duration-200">
             {button.isImage ? (
               <img 
                 src={button.icon} 
                 alt={button.label} 
-                className="w-12 h-12"
+                className="w-10 h-10"
+                style={{ filter: 'brightness(0) invert(1)' }}
                 onError={(e) => {
                   e.currentTarget.style.display = 'none';
                 }}
               />
             ) : (
-              <span className={button.icon === '📤' ? 'text-sky-500' : 'text-blue-600'}>
+              <span className="text-white text-2xl">
                 {button.icon}
               </span>
             )}
           </div>
-          <span className="text-xs text-blue-600 font-medium">{button.label}</span>
+          <span className="text-xs text-gray-700 font-semibold group-hover:text-blue-600 transition-colors">{button.label}</span>
         </button>
       ))}
     </div>

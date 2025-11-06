@@ -36,7 +36,7 @@ export const CELO_TOKENS = {
   },
 } as const
 
-// Celo Alfajores Testnet tokens
+// Celo Sepolia Testnet tokens
 export const CELO_TESTNET_TOKENS = {
   CELO: {
     address: '0x0000000000000000000000000000000000000000', // Native token
@@ -44,15 +44,15 @@ export const CELO_TESTNET_TOKENS = {
     name: 'Celo',
     decimals: 18,
     logoURI: '/celo_logo.png',
-    chainId: 44787, // Celo Alfajores Testnet
+    chainId: 11142220, // Celo Sepolia Testnet
   },
   cUSD: {
-    address: '0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1', // cUSD on Alfajores
+    address: '0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1', // cUSD on Sepolia (may need update)
     symbol: 'cUSD',
     name: 'Celo Dollar',
     decimals: 18,
     logoURI: '/cusd-logo.png',
-    chainId: 44787,
+    chainId: 11142220,
   },
 } as const
 
@@ -71,11 +71,11 @@ export const CELO_CHAINS = {
     },
   },
   testnet: {
-    id: 44787,
-    name: 'Celo Alfajores',
-    rpcUrl: 'https://alfajores-forno.celo-testnet.org',
-    blockExplorer: 'https://alfajores-explorer.celo.org',
-    faucet: 'https://faucet.celo.org/alfajores',
+    id: 11142220,
+    name: 'Celo Sepolia',
+    rpcUrl: 'https://forno.celo-sepolia.celo-testnet.org',
+    blockExplorer: 'https://sepolia.celoscan.io',
+    faucet: 'https://faucet.celo.org',
     nativeCurrency: {
       name: 'Celo',
       symbol: 'CELO',

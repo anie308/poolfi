@@ -55,7 +55,7 @@ export default function WalletCard({ isDesktop = false, onFundWallet }: WalletCa
         name: celoInfo?.name || `Celo Chain ${chainId}`, 
         color: '#FCFF52', 
         isCelo: true,
-        isTestnet: celoInfo?.id === 44787 // Celo Alfajores Testnet
+        isTestnet: celoInfo?.id === 11142220 // Celo Sepolia Testnet
       }
     }
     
@@ -79,13 +79,9 @@ export default function WalletCard({ isDesktop = false, onFundWallet }: WalletCa
 
   return (
     <div 
-      className={`rounded-2xl p-3 text-white ${
-        isDesktop ? 'mb-8' : 'mx-5 my-5'
+      className={`rounded-lg p-4 md:p-6 text-white bg-blue-600 ${
+        isDesktop ? '' : 'mx-5 my-5'
       }`}
-      style={{ 
-        backgroundColor: '#7daaf0',
-        border: '2px solid #005ae2'
-      }}
     >
       <div className="flex justify-between items-center mb-2">
         <div className="text-sm opacity-90">Pool Wallet</div>
@@ -116,11 +112,8 @@ export default function WalletCard({ isDesktop = false, onFundWallet }: WalletCa
                 return (
                   <button
                     onClick={openConnectModal}
-                    className="px-2 py-1 rounded-lg hover:opacity-80 transition-opacity font-semibold"
+                    className="px-4 py-2 rounded-lg hover:opacity-90 transition-all duration-200 font-semibold bg-white/20 border border-white/30 hover:bg-white/30"
                     style={{
-                      backgroundColor: '#90b7f1',
-                      border: '2px solid #005ae2',
-                      color: '#005ae2',
                       fontSize: '12px'
                     }}
                   >
@@ -151,11 +144,8 @@ export default function WalletCard({ isDesktop = false, onFundWallet }: WalletCa
                   {onFundWallet && (
                     <button 
                       onClick={onFundWallet}
-                      className="px-2 py-1 rounded-lg hover:opacity-80 transition-opacity font-semibold"
+                      className="px-4 py-2 rounded-lg hover:opacity-90 transition-all duration-200 font-semibold bg-white/20 border border-white/30 hover:bg-white/30"
                       style={{
-                        backgroundColor: '#90b7f1',
-                        border: '2px solid #005ae2',
-                        color: '#005ae2',
                         fontSize: '12px'
                       }}
                     >
@@ -169,13 +159,13 @@ export default function WalletCard({ isDesktop = false, onFundWallet }: WalletCa
         </div>
       </div>
       
-      <div className="text-2xl font-medium mb-1">
+      <div className="text-3xl font-bold mb-2 tracking-tight">
         {isConnected && balance ? (
           <div className="flex items-center gap-2">
-            <span>{formatBalance(balance.value)} CELO</span>
+            <span>{formatBalance(balance.value)} <span className="text-xl font-semibold opacity-90">CELO</span></span>
           </div>
         ) : (
-          '0.00 CELO'
+          <span>0.00 <span className="text-xl font-semibold opacity-90">CELO</span></span>
         )}
       </div>
       

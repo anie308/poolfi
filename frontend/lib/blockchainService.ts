@@ -139,7 +139,7 @@ export class BlockchainService {
 
 // Utility function to create blockchain service instance
 export function createBlockchainService(): BlockchainService | null {
-  const rpcUrl = process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo.org'
+  const rpcUrl = process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo-sepolia.celo-testnet.org'
   // Import contract address from configuration
   const contractAddress = process.env.NEXT_PUBLIC_POOL_MANAGER_ADDRESS || '0x0000000000000000000000000000000000000000'
 

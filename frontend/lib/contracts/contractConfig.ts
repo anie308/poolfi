@@ -13,9 +13,7 @@ export const POOL_MANAGER_ADDRESS =
 
 // Check if contract is deployed
 export const isContractDeployed = 
-  POOL_MANAGER_ADDRESS !== '0x0000000000000000000000000000000000000000' &&
-  POOL_MANAGER_ADDRESS !== ''
-
+  POOL_MANAGER_ADDRESS !== '0x0000000000000000000000000000000000000000' 
 // Network configuration
 export const CONTRACT_NETWORKS = {
   celo: {
@@ -30,10 +28,16 @@ export const CONTRACT_NETWORKS = {
     rpcUrl: 'https://alfajores-forno.celo-testnet.org',
     explorer: 'https://alfajores.celoscan.io',
   },
+  sepolia: {
+    chainId: 11142220,
+    name: 'Celo Sepolia',
+    rpcUrl: 'https://forno.celo-sepolia.celo-testnet.org',
+    explorer: 'https://sepolia.celoscan.io',
+  },
 } as const
 
 // Get contract explorer URL
-export function getContractExplorerUrl(network: 'celo' | 'alfajores' = 'celo'): string {
+export function getContractExplorerUrl(network: 'celo' | 'alfajores' | 'sepolia' = 'sepolia'): string {
   const networkConfig = CONTRACT_NETWORKS[network]
   return `${networkConfig.explorer}/address/${POOL_MANAGER_ADDRESS}`
 }

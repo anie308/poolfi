@@ -27,6 +27,13 @@ module.exports = {
       chainId: 44787,
       gasPrice: 20000000000,
     },
+    // Celo Sepolia Testnet
+    sepolia: {
+      url: process.env.CELO_SEPOLIA_RPC_URL || "https://forno.celo-sepolia.celo-testnet.org",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      chainId: 11142220,
+      gasPrice: 20000000000,
+    },
     // Local development network
     localhost: {
       url: "http://127.0.0.1:8545",
@@ -37,6 +44,7 @@ module.exports = {
     apiKey: {
       celo: process.env.CELOSCAN_API_KEY || "",
       alfajores: process.env.CELOSCAN_API_KEY || "",
+      sepolia: process.env.CELOSCAN_API_KEY || "",
     },
     customChains: [
       {
@@ -53,6 +61,14 @@ module.exports = {
         urls: {
           apiURL: "https://api-alfajores.celoscan.io/api",
           browserURL: "https://alfajores.celoscan.io",
+        },
+      },
+      {
+        network: "sepolia",
+        chainId: 11142220,
+        urls: {
+          apiURL: "https://api-sepolia.celoscan.io/api",
+          browserURL: "https://sepolia.celoscan.io",
         },
       },
     ],
