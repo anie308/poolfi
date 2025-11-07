@@ -1,8 +1,5 @@
 'use client'
 
-import { useState } from 'react'
-import InviteMembersModal from './InviteMembersModal'
-
 interface PoolDetailsModalProps {
   isOpen: boolean
   onClose: () => void
@@ -33,16 +30,9 @@ export default function PoolDetailsModal({
   onSubmit, 
   isLoading 
 }: PoolDetailsModalProps) {
-  const [showInviteModal, setShowInviteModal] = useState(false)
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     onSubmit(e)
-  }
-
-  const handleClose = () => {
-    setShowInviteModal(false)
-    onClose()
   }
 
   if (!isOpen) return null
@@ -145,13 +135,6 @@ export default function PoolDetailsModal({
           </div>
         </form>
       </div>
-      
-      {/* Invite Members Modal */}
-      <InviteMembersModal
-        isOpen={showInviteModal}
-        onClose={handleClose}
-        poolName={poolDetails.poolName || 'Savers Rotate'}
-      />
     </div>
   )
 }

@@ -615,7 +615,7 @@ export function usePool(poolId: number | string) {
       id: poolIdNum,
       name: basicInfo[2] as string,
       creator: basicInfo[1] as string,
-      deadline: Number(basicInfo[3] as bigint),
+      deadline: Number(basicInfo[3]), // Convert bigint to number for timestamp
       isActive: basicInfo[4] as boolean,
       isCompleted: basicInfo[5] as boolean,
       isRefundable: basicInfo[6] as boolean,

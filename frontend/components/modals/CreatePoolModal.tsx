@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { useCreatePool } from '@/hooks/usePoolManager'
+import { useReadContract } from 'wagmi'
+import { PoolManagerABI } from '@/lib/contracts/abi'
+import { POOL_MANAGER_ADDRESS, isContractDeployed } from '@/lib/contracts/contractConfig'
 import toast from 'react-hot-toast'
 import PoolDetailsModal from './PoolDetailsModal'
 import InviteMembersModal from './InviteMembersModal'
@@ -21,6 +24,7 @@ export default function CreatePoolModal({ isOpen, onClose }: CreatePoolModalProp
   })
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [showInviteModal, setShowInviteModal] = useState(false)
+  const [createdPoolId, setCreatedPoolId] = useState<number | null>(null)
   const [poolDetails, setPoolDetails] = useState({
     poolName: '',
     description: '',
@@ -29,10 +33,20 @@ export default function CreatePoolModal({ isOpen, onClose }: CreatePoolModalProp
   })
 
   const { createPool, isLoading, isSuccess, error } = useCreatePool()
+  
+  // Get current pool count to determine the new pool ID
+  const { data: poolCount } = useReadContract({
+    address: isContractDeployed ? POOL_MANAGER_ADDRESS : undefined,
+    abi: PoolManagerABI,
+    functionName: 'poolCount'
+  })
 
   // Handle successful pool creation
   useEffect(() => {
-    if (isSuccess) {
+    if (isSuccess && poolCount) {
+      // The new pool ID will be the current poolCount
+      const newPoolId = Number(poolCount)
+      setCreatedPoolId(newPoolId)
       toast.success('Pool created successfully!')
       setShowDetailsModal(false)
       // Show invite modal after a short delay
@@ -40,7 +54,7 @@ export default function CreatePoolModal({ isOpen, onClose }: CreatePoolModalProp
         setShowInviteModal(true)
       }, 500)
     }
-  }, [isSuccess])
+  }, [isSuccess, poolCount])
 
   // Handle errors
   useEffect(() => {
@@ -241,11 +255,13 @@ export default function CreatePoolModal({ isOpen, onClose }: CreatePoolModalProp
       />
 
       {/* Invite Members Modal */}
-      <InviteMembersModal
-        isOpen={showInviteModal}
-        onClose={handleInviteClose}
-        poolName={poolDetails.poolName || 'New Pool'}
-      />
+      {createdPoolId && (
+        <InviteMembersModal
+          isOpen={showInviteModal}
+          onClose={handleInviteClose}
+          poolId={createdPoolId}
+        />
+      )}
     </div>
   )
 }

@@ -45,5 +45,7 @@ export const wagmiConfig = getDefaultConfig({
   projectId: projectId,
   chains: [celoChain],
   ssr: true,
+  // Disable auto-connect - users must manually connect their wallet
+  // This is done via WagmiProvider's connectBehavior option
 })
 

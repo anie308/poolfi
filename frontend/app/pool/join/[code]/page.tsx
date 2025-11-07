@@ -18,8 +18,8 @@ export default function JoinPoolPage() {
 
   const handleClose = () => {
     setShowModal(false)
-    // Redirect to home page after closing
-    router.push('/')
+    // Redirect to dashboard after closing
+    router.push('/app')
   }
 
   return (
