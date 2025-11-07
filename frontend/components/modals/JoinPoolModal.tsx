@@ -1,14 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface JoinPoolModalProps {
   isOpen: boolean
   onClose: () => void
+  poolCode?: string // Optional pool code from URL
 }
 
-export default function JoinPoolModal({ isOpen, onClose }: JoinPoolModalProps) {
+export default function JoinPoolModal({ isOpen, onClose, poolCode }: JoinPoolModalProps) {
   const [inviteLink, setInviteLink] = useState('')
+
+  // If poolCode is provided from URL, use it
+  useEffect(() => {
+    if (poolCode) {
+      setInviteLink(poolCode)
+    }
+  }, [poolCode])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

@@ -52,17 +52,17 @@ export default function PoolsGrid() {
             className="bg-white rounded-lg border border-gray-200 p-4 md:p-6 cursor-pointer hover:border-blue-500 hover:shadow-md transition-all duration-200"
           >
             {/* Header with pool name and circular progress */}
-            <div className="flex justify-between items-start mb-6">
-              <div>
+            <div className="flex justify-between items-start mb-6 gap-4">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-3">
-                  <h3 className="font-semibold" style={{ fontSize: '16px', color: '#141b34' }}>{pool.name}</h3>
+                  <h3 className="font-semibold truncate" style={{ fontSize: '16px', color: '#141b34' }}>{pool.name}</h3>
                   {pool.isUserCreated && (
-                    <span className="text-xs px-2.5 py-1 bg-green-500 text-white rounded-full font-semibold">
+                    <span className="text-xs px-2.5 py-1 bg-green-500 text-white rounded-full font-semibold flex-shrink-0">
                       Your Pool
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-gray-600 mb-2">{pool.description}</p>
+                <p className="text-xs text-gray-600 mb-2 line-clamp-2">{pool.description}</p>
                 <div className="flex -space-x-2">
                   <div className="w-8 h-8 bg-amber-400 rounded-full border-2 border-white shadow-md"></div>
                   <div className="w-8 h-8 bg-emerald-500 rounded-full border-2 border-white shadow-md"></div>
@@ -72,7 +72,7 @@ export default function PoolsGrid() {
                   </div>
                 </div>
               </div>
-              <div className="relative w-16 h-16">
+              <div className="relative w-16 h-16 flex-shrink-0">
                 <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 36 36">
                   <path
                     className="text-gray-200"

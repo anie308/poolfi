@@ -169,14 +169,14 @@ export default function WalletCard({ isDesktop = false, onFundWallet }: WalletCa
         )}
       </div>
       
-      <div className="flex justify-between items-end">
-        <div className="text-xs opacity-80 flex items-center gap-2" style={{ fontSize: '10px' }}>
+      <div className="flex justify-between items-end gap-2">
+        <div className="text-xs opacity-80 flex items-center gap-2 min-w-0 flex-1" style={{ fontSize: '10px' }}>
           {isConnected && address ? (
             <>
-              <span>Wallet: {formatAddress(address)}</span>
+              <span className="truncate">Wallet: {formatAddress(address)}</span>
               <button
                 onClick={() => copyToClipboard(address)}
-                className="hover:opacity-70 transition-opacity"
+                className="hover:opacity-70 transition-opacity flex-shrink-0"
                 title="Copy address"
               >
                 {copied ? (
@@ -191,24 +191,24 @@ export default function WalletCard({ isDesktop = false, onFundWallet }: WalletCa
               </button>
             </>
           ) : (
-            <span>Connect wallet to view address</span>
+            <span className="truncate">Connect wallet to view address</span>
           )}
         </div>
-        <div className="text-xs opacity-90 text-right">
+        <div className="text-xs opacity-90 text-right flex-shrink-0">
           {isConnected ? (
             <div className="flex items-center gap-1">
               <div 
                 className="w-2 h-2 rounded-full"
                 style={{ backgroundColor: getChainInfo(chainId).color }}
               ></div>
-              <span>{getChainInfo(chainId).name}</span>
+              <span className="whitespace-nowrap">{getChainInfo(chainId).name}</span>
             </div>
           ) : (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 whitespace-nowrap">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
-              Connect to see balance
+              <span className="hidden sm:inline">Connect</span>
             </div>
           )}
         </div>

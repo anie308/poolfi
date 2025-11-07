@@ -499,3 +499,144 @@ export function useFeeInfo() {
     isLoading
   }
 }
+
+// Hook to fetch a single pool by ID
+export function usePool(poolId: number | string) {
+  const { address, isConnected } = useAccount()
+  const [poolData, setPoolData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [members, setMembers] = useState<string[]>([])
+
+  const poolIdNum = typeof poolId === 'string' ? parseInt(poolId) : poolId
+
+  // Get pool basic info
+  const { data: basicInfo } = useReadContract({
+    address: isContractDeployed ? POOLFI_ADDRESS : undefined,
+    abi: PoolManagerABI,
+    functionName: 'getPoolBasicInfo',
+    args: poolIdNum > 0 ? [BigInt(poolIdNum)] : undefined,
+  })
+
+  // Get pool financial info
+  const { data: financialInfo } = useReadContract({
+    address: isContractDeployed ? POOLFI_ADDRESS : undefined,
+    abi: PoolManagerABI,
+    functionName: 'getPoolFinancialInfo',
+    args: poolIdNum > 0 ? [BigInt(poolIdNum)] : undefined,
+  })
+
+  // Get pool member info
+  const { data: memberInfo } = useReadContract({
+    address: isContractDeployed ? POOLFI_ADDRESS : undefined,
+    abi: PoolManagerABI,
+    functionName: 'getPoolMemberInfo',
+    args: poolIdNum > 0 ? [BigInt(poolIdNum)] : undefined,
+  })
+
+  // Get user's contribution amount
+  const { data: userContribution } = useReadContract({
+    address: isContractDeployed && address ? POOLFI_ADDRESS : undefined,
+    abi: PoolManagerABI,
+    functionName: 'getContributionAmount',
+    args: poolIdNum > 0 && address ? [BigInt(poolIdNum), address] : undefined,
+  })
+
+  // Check if user has contributed
+  const { data: hasContributed } = useReadContract({
+    address: isContractDeployed && address ? POOLFI_ADDRESS : undefined,
+    abi: PoolManagerABI,
+    functionName: 'hasUserContributed',
+    args: poolIdNum > 0 && address ? [BigInt(poolIdNum), address] : undefined,
+  })
+
+  // Fetch pool members
+  useEffect(() => {
+    if (!poolIdNum || !isContractDeployed) {
+      setMembers([])
+      return
+    }
+
+    const fetchMembers = async () => {
+      try {
+        const publicClient = createPublicClient({
+          chain: {
+            id: 11142220,
+            name: 'Celo Sepolia',
+            network: 'celo-sepolia',
+            nativeCurrency: {
+              decimals: 18,
+              name: 'CELO',
+              symbol: 'CELO',
+            },
+            rpcUrls: {
+              default: {
+                http: [process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo-sepolia.celo-testnet.org'],
+              },
+            },
+          },
+          transport: http(process.env.NEXT_PUBLIC_CELO_RPC_URL || 'https://forno.celo-sepolia.celo-testnet.org'),
+        })
+
+        const contract = getContract({
+          address: POOLFI_ADDRESS,
+          abi: PoolManagerABI,
+          client: publicClient,
+        })
+
+        const memberList = await contract.read.getPoolMembers([BigInt(poolIdNum)])
+        setMembers(memberList as string[])
+      } catch (error) {
+        console.error('Error fetching pool members:', error)
+        setMembers([])
+      }
+    }
+
+    fetchMembers()
+  }, [poolIdNum, isContractDeployed])
+
+  // Combine all pool data
+  useEffect(() => {
+    if (!basicInfo || !financialInfo || !memberInfo) {
+      setLoading(true)
+      return
+    }
+
+    const targetAmount = financialInfo[0] as bigint
+    const currentAmount = financialInfo[1] as bigint
+    const contributionAmount = financialInfo[2] as bigint
+    const maxMembers = memberInfo[0] as bigint
+    const currentMembers = memberInfo[1] as bigint
+
+    const progress = targetAmount > BigInt(0) 
+      ? Number((currentAmount * BigInt(100)) / targetAmount) 
+      : 0
+
+    setPoolData({
+      id: poolIdNum,
+      name: basicInfo[2] as string,
+      creator: basicInfo[1] as string,
+      deadline: Number(basicInfo[3] as bigint),
+      isActive: basicInfo[4] as boolean,
+      isCompleted: basicInfo[5] as boolean,
+      isRefundable: basicInfo[6] as boolean,
+      targetAmount,
+      currentAmount,
+      contributionAmount,
+      maxMembers: Number(maxMembers),
+      currentMembers: Number(currentMembers),
+      progress: Math.min(progress, 100),
+      userContribution: userContribution ? formatUnits(userContribution as bigint, USDC_DECIMALS) : '0',
+      hasContributed: hasContributed || false,
+      members,
+    })
+
+    setLoading(false)
+  }, [basicInfo, financialInfo, memberInfo, userContribution, hasContributed, members, poolIdNum])
+
+  return {
+    pool: poolData,
+    loading,
+    members,
+    isCreator: address && poolData?.creator?.toLowerCase() === address?.toLowerCase(),
+  }
+}

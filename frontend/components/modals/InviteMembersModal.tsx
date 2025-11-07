@@ -5,11 +5,11 @@ import { useState } from 'react'
 interface InviteMembersModalProps {
   isOpen: boolean
   onClose: () => void
-  poolName: string
+  poolId: number
 }
 
-export default function InviteMembersModal({ isOpen, onClose, poolName }: InviteMembersModalProps) {
-  const [inviteLink] = useState('pool/join/FSE7N3')
+export default function InviteMembersModal({ isOpen, onClose, poolId }: InviteMembersModalProps) {
+  const inviteLink = `pool/join/${poolId}`
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.origin + '/' + inviteLink)
@@ -39,7 +39,7 @@ export default function InviteMembersModal({ isOpen, onClose, poolName }: Invite
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <div className="font-bold text-gray-900 mb-2">&quot;{poolName}&quot; is Ready!</div>
+          <div className="font-bold text-gray-900 mb-2">Pool #{poolId} is Ready!</div>
           <div className="text-sm text-gray-600">Wish to onboard Poolers?</div>
         </div>
 

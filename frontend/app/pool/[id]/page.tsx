@@ -1,335 +1,549 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useAccount } from 'wagmi'
+import { formatUnits } from 'viem'
 import PageHeader from '@/components/PageHeader'
+import { usePool, useContribute, useWithdraw, useRefund, useApproveToken, useTokenAllowance, useMarkPoolAsFailed } from '@/hooks/usePoolManager'
+import { USDC_DECIMALS } from '@/lib/contracts/contractConfig'
+import toast from 'react-hot-toast'
+import InviteMembersModal from '@/components/modals/InviteMembersModal'
 
 export default function PoolDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const poolId = params.id
+  const { address, isConnected } = useAccount()
+  const poolId = typeof params.id === 'string' ? parseInt(params.id) : 0
+  
+  const { pool, loading, members, isCreator } = usePool(poolId)
+  const { contribute, isLoading: isContributing } = useContribute()
+  const { withdraw, isLoading: isWithdrawing } = useWithdraw()
+  const { refund, isLoading: isRefunding } = useRefund()
+  const { approveToken, isLoading: isApproving } = useApproveToken()
+  const { allowance } = useTokenAllowance()
+  const { markPoolAsFailed, isLoading: isMarkingFailed } = useMarkPoolAsFailed()
 
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
+  const [timeRemaining, setTimeRemaining] = useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null)
 
-  const poolData = {
-    id: poolId,
-    name: 'Growth Circle',
-    totalMembers: 8,
-    contributionAmount: 100
+  // Calculate time remaining until deadline
+  useEffect(() => {
+    if (!pool?.deadline) return
+
+    const updateTimeRemaining = () => {
+      const now = Math.floor(Date.now() / 1000)
+      const remaining = pool.deadline - now
+
+      if (remaining <= 0) {
+        setTimeRemaining({ days: 0, hours: 0, minutes: 0, seconds: 0 })
+        return
+      }
+
+      const days = Math.floor(remaining / 86400)
+      const hours = Math.floor((remaining % 86400) / 3600)
+      const minutes = Math.floor((remaining % 3600) / 60)
+      const seconds = remaining % 60
+
+      setTimeRemaining({ days, hours, minutes, seconds })
+    }
+
+    updateTimeRemaining()
+    const interval = setInterval(updateTimeRemaining, 1000)
+
+    return () => clearInterval(interval)
+  }, [pool?.deadline])
+
+  const handleContribute = () => {
+    if (!isConnected || !address) {
+      toast.error('Please connect your wallet')
+      return
+    }
+
+    if (!pool) {
+      toast.error('Pool not found')
+      return
+    }
+
+    // Contribute (approval should already be done if needed)
+    contribute(poolId, BigInt(0)) // 0 minAmountOut for USDC
+    toast.success('Please confirm the transaction in your wallet')
   }
 
-  const members = [
-    { id: 1, name: 'John Doe', role: 'Admin', status: 'Active', avatar: 'JD' },
-    { id: 2, name: 'Jane Smith', role: 'Member', status: 'Active', avatar: 'JS' },
-    { id: 3, name: 'Mike Johnson', role: 'Member', status: 'Pending', avatar: 'MJ' },
-    { id: 4, name: 'Sarah Wilson', role: 'Member', status: 'Active', avatar: 'SW' }
-  ]
+  const handleWithdraw = () => {
+    if (!pool) return
+    withdraw(poolId, BigInt(0))
+    toast.success('Withdrawal submitted!')
+  }
 
-  const activities = [
-    { id: 1, type: 'contribution', user: 'John Doe', amount: '$100', date: '2 hours ago' },
-    { id: 2, type: 'joined', user: 'Mike Johnson', amount: null, date: '1 day ago' },
-    { id: 3, type: 'payout', user: 'Jane Smith', amount: '$800', date: '3 days ago' },
-    { id: 4, type: 'contribution', user: 'Sarah Wilson', amount: '$100', date: '1 week ago' }
-  ]
+  const handleRefund = () => {
+    if (!pool) return
+    refund(poolId, BigInt(0))
+    toast.success('Refund submitted!')
+  }
+
+  const handleMarkAsFailed = () => {
+    if (!pool) return
+    if (confirm('Are you sure you want to mark this pool as failed? This will enable refunds for all contributors.')) {
+      markPoolAsFailed(poolId)
+      toast.success('Pool marked as failed')
+    }
+  }
+
+  const formatAddress = (addr: string) => {
+    if (!addr) return ''
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`
+  }
+
+  const formatAmount = (amount: bigint) => {
+    return parseFloat(formatUnits(amount, USDC_DECIMALS)).toFixed(2)
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <PageHeader />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading pool data...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!pool) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <PageHeader />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <p className="text-gray-600 mb-4">Pool not found</p>
+            <button
+              onClick={() => router.push('/')}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg"
+            >
+              Go Back
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const progressPercentage = pool?.progress || 0
+  const canContribute = pool?.isActive && !pool?.isCompleted && !pool?.isRefundable && !pool?.hasContributed
+  const canWithdraw = pool?.isCompleted && pool?.hasContributed
+  const canRefund = pool?.isRefundable && pool?.hasContributed
+  const needsApproval = pool ? (allowance < pool.contributionAmount) : false
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#eff6ff' }}>
-      <div className="max-w-sm mx-auto min-h-screen">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 py-6">
         <PageHeader />
         
-        <div className="px-5">
-          <button 
-            onClick={() => router.back()}
-            className="text-2xl text-gray-500 mt-1"
-          >
-            ‹
-          </button>
-        </div>
+        {/* Back Button */}
+        <button 
+          onClick={() => router.back()}
+          className="text-2xl text-gray-500 hover:text-gray-700 mb-4"
+        >
+          ‹ Back
+        </button>
 
-        <div className="mx-5 mt-5">
-          <div className="mb-4">
-            <div className="flex items-center gap-3">
+        {/* Pool Header Card */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
+                <span className="text-2xl font-bold text-blue-600">
+                  {pool.name.charAt(0).toUpperCase()}
+                </span>
+              </div>
               <div>
-                <div className="w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <img
-                    src="/pool profile.png"
-                    alt="Pool Profile"
-                    className="w-24 h-24 rounded-full object-cover"
-                    onError={(e) => {
-                      console.error('Pool profile image failed to load:', e);
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
-                </div>
-                <h2 className="font-semibold text-gray-900 mb-1 text-center whitespace-nowrap" style={{ fontSize: '16px' }}>{poolData.name}</h2>
-              </div>
-              <div className="flex items-center gap-6 -mt-2">
-                <div className="flex flex-col text-center">
-                  <div className="font-medium text-gray-900" style={{ fontSize: '24px' }}>
-                    {poolData.totalMembers}
-                  </div>
-                  <div className="font-medium text-gray-600" style={{ fontSize: '12px' }}>
-                    members
-                  </div>
-                </div>
-                <div className="flex flex-col text-center">
-                  <div className="font-medium text-gray-900" style={{ fontSize: '24px' }}>
-                    ${poolData.contributionAmount}
-                  </div>
-                  <div className="font-medium text-gray-600" style={{ fontSize: '12px' }}>
-                    contribution
-                  </div>
-                </div>
-                <div className="flex flex-col text-center">
-                  <div className="font-medium text-gray-900" style={{ fontSize: '24px' }}>
-                    {poolData.totalMembers}
-                  </div>
-                  <div className="font-medium text-gray-600" style={{ fontSize: '12px' }}>
-                    payouts
-                  </div>
-                </div>
+                <h1 className="text-2xl font-bold text-gray-900">{pool.name}</h1>
+                <p className="text-sm text-gray-600">Created by {formatAddress(pool.creator)}</p>
+                {isCreator && (
+                  <span className="inline-block mt-1 px-2 py-1 text-xs font-semibold bg-green-100 text-green-700 rounded-full">
+                    You are the creator
+                  </span>
+                )}
               </div>
             </div>
-          </div>
-        </div>
-        
-        <div className="mx-5 mt-6">
-          <div 
-            className="rounded-xl p-4"
-            style={{
-              backgroundColor: '#ffffff'
-            }}
-          >
-            <div className="text-center font-medium text-gray-900 mb-4" style={{ fontSize: '16px' }}>
-              Next payout
-            </div>
-            <div 
-              className="rounded-xl p-4 text-center text-white"
-              style={{
-                backgroundColor: '#4264e5',
-                border: '4px solid #aec2ed'
-              }}
-            >
-              <div className="grid grid-cols-4 gap-2 text-sm">
-                <div>
-                  <div className="font-semibold">2</div>
-                  <div className="text-xs opacity-90">Months</div>
-                </div>
-                <div>
-                  <div className="font-semibold">15</div>
-                  <div className="text-xs opacity-90">Days</div>
-                </div>
-                <div>
-                  <div className="font-semibold">8</div>
-                  <div className="text-xs opacity-90">Hours</div>
-                </div>
-                <div>
-                  <div className="font-semibold">32</div>
-                  <div className="text-xs opacity-90">Minutes</div>
-                </div>
-              </div>
+            
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              {canContribute && (
+                <>
+                  {needsApproval ? (
+                    <button
+                      onClick={() => {
+                        if (!pool) return
+                        approveToken(pool.contributionAmount * BigInt(2))
+                        toast.success('Please approve the transaction in your wallet')
+                      }}
+                      disabled={isApproving}
+                      className="px-6 py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isApproving ? 'Approving...' : 'Approve USDC'}
+                    </button>
+                  ) : null}
+                  <button
+                    onClick={handleContribute}
+                    disabled={isContributing || needsApproval}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isContributing ? 'Contributing...' : 'Contribute'}
+                  </button>
+                </>
+              )}
+              {canWithdraw && (
+                <button
+                  onClick={handleWithdraw}
+                  disabled={isWithdrawing}
+                  className="px-6 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50"
+                >
+                  {isWithdrawing ? 'Withdrawing...' : 'Withdraw'}
+                </button>
+              )}
+              {canRefund && (
+                <button
+                  onClick={handleRefund}
+                  disabled={isRefunding}
+                  className="px-6 py-2 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 disabled:opacity-50"
+                >
+                  {isRefunding ? 'Processing...' : 'Get Refund'}
+                </button>
+              )}
+              {isCreator && pool.isActive && !pool.isCompleted && (
+                <button
+                  onClick={() => setShowInviteModal(true)}
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700"
+                >
+                  Invite
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="mx-5 mt-6">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {/* Progress Card */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="text-sm text-gray-600 mb-2">Progress</div>
+            <div className="text-3xl font-bold text-gray-900 mb-2">{progressPercentage}%</div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${progressPercentage}%` }}
+              ></div>
+            </div>
+            <div className="text-xs text-gray-500 mt-2">
+              {formatAmount(pool.currentAmount)} / {formatAmount(pool.targetAmount)} USDC
+            </div>
+          </div>
+
+          {/* Members Card */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="text-sm text-gray-600 mb-2">Members</div>
+            <div className="text-3xl font-bold text-gray-900">
+              {pool.currentMembers} / {pool.maxMembers}
+            </div>
+            <div className="text-xs text-gray-500 mt-2">
+              {pool.maxMembers - pool.currentMembers} spots remaining
+            </div>
+          </div>
+
+          {/* Contribution Card */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="text-sm text-gray-600 mb-2">Contribution</div>
+            <div className="text-3xl font-bold text-gray-900">
+              {formatAmount(pool.contributionAmount)} USDC
+            </div>
+            <div className="text-xs text-gray-500 mt-2">
+              Per member
+            </div>
+          </div>
+
+          {/* Status Card */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="text-sm text-gray-600 mb-2">Status</div>
+            <div className="text-lg font-bold mb-2">
+              {pool.isCompleted ? (
+                <span className="text-green-600">Completed</span>
+              ) : pool.isRefundable ? (
+                <span className="text-orange-600">Failed</span>
+              ) : pool.isActive ? (
+                <span className="text-blue-600">Active</span>
+              ) : (
+                <span className="text-gray-600">Inactive</span>
+              )}
+            </div>
+            {pool.hasContributed && (
+              <div className="text-xs text-gray-500">
+                You contributed: {pool.userContribution} USDC
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Deadline Card */}
+        {timeRemaining && (
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl shadow-sm p-6 mb-6 text-white">
+            <div className="text-sm opacity-90 mb-4">Time Remaining</div>
+            <div className="grid grid-cols-4 gap-4">
+              <div className="text-center">
+                <div className="text-3xl font-bold">{timeRemaining.days}</div>
+                <div className="text-xs opacity-90">Days</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold">{timeRemaining.hours}</div>
+                <div className="text-xs opacity-90">Hours</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold">{timeRemaining.minutes}</div>
+                <div className="text-xs opacity-90">Minutes</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold">{timeRemaining.seconds}</div>
+                <div className="text-xs opacity-90">Seconds</div>
+              </div>
+            </div>
+            {pool.deadline * 1000 < Date.now() && !pool.isCompleted && !pool.isRefundable && (
+              <div className="mt-4 text-center">
+                <button
+                  onClick={handleMarkAsFailed}
+                  disabled={isMarkingFailed}
+                  className="px-4 py-2 bg-white text-blue-600 rounded-lg font-semibold hover:bg-gray-100 disabled:opacity-50"
+                >
+                  {isMarkingFailed ? 'Processing...' : 'Mark Pool as Failed'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
           <div className="flex border-b border-gray-200">
             <button 
               onClick={() => setActiveTab('overview')}
-              className={`flex-1 py-3 px-4 text-center font-medium border-b-2 ${
+              className={`flex-1 py-4 px-6 text-center font-medium border-b-2 transition-colors ${
                 activeTab === 'overview' 
                   ? 'text-blue-600 border-blue-600' 
-                  : 'text-gray-500 border-transparent'
+                  : 'text-gray-500 border-transparent hover:text-gray-700'
               }`}
             >
               Overview
             </button>
             <button 
               onClick={() => setActiveTab('members')}
-              className={`flex-1 py-3 px-4 text-center font-medium border-b-2 ${
+              className={`flex-1 py-4 px-6 text-center font-medium border-b-2 transition-colors ${
                 activeTab === 'members' 
                   ? 'text-blue-600 border-blue-600' 
-                  : 'text-gray-500 border-transparent'
+                  : 'text-gray-500 border-transparent hover:text-gray-700'
               }`}
             >
-              Members
+              Members ({pool.currentMembers})
             </button>
             <button 
-              onClick={() => setActiveTab('activities')}
-              className={`flex-1 py-3 px-4 text-center font-medium border-b-2 ${
-                activeTab === 'activities' 
+              onClick={() => setActiveTab('details')}
+              className={`flex-1 py-4 px-6 text-center font-medium border-b-2 transition-colors ${
+                activeTab === 'details' 
                   ? 'text-blue-600 border-blue-600' 
-                  : 'text-gray-500 border-transparent'
+                  : 'text-gray-500 border-transparent hover:text-gray-700'
               }`}
             >
-              Activities
+              Details
             </button>
           </div>
-        </div>
 
-        {activeTab === 'overview' && (
-          <div className="mx-5 mt-4">
-            <div 
-              className="rounded-xl p-4"
-              style={{
-                backgroundColor: '#eff6ff',
-                border: '1px solid #d9e3f6'
-              }}
-            >
-              <div className="space-y-4">
+          {/* Tab Content */}
+          <div className="p-6">
+            {activeTab === 'overview' && (
+              <div className="space-y-6">
+                {/* Pool Progress */}
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-1">Pool Admin</h3>
-                  <p className="text-sm text-gray-600">You</p>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Pool Progress</h3>
+                  <div className="bg-gray-50 rounded-lg p-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="text-sm text-gray-600">Target Amount</span>
+                      <span className="text-lg font-bold text-gray-900">{formatAmount(pool.targetAmount)} USDC</span>
+                    </div>
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="text-sm text-gray-600">Current Amount</span>
+                      <span className="text-lg font-bold text-blue-600">{formatAmount(pool.currentAmount)} USDC</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
+                      <div 
+                        className="bg-blue-600 h-4 rounded-full transition-all duration-300 flex items-center justify-end pr-2"
+                        style={{ width: `${progressPercentage}%` }}
+                      >
+                        {progressPercentage > 10 && (
+                          <span className="text-xs text-white font-semibold">{progressPercentage}%</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {formatAmount(BigInt(pool.targetAmount) - BigInt(pool.currentAmount))} USDC remaining
+                    </div>
+                  </div>
                 </div>
+
+                {/* Your Contribution */}
+                {pool.hasContributed && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Contribution</h3>
+                    <div className="bg-blue-50 rounded-lg p-6 border border-blue-100">
+                      <div className="text-2xl font-bold text-blue-600 mb-2">
+                        {pool.userContribution} USDC
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        You have contributed to this pool
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Pool Info */}
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-1">Pool Description</h3>
-                  <p className="text-sm text-gray-600">Plant Now, Harvest Later</p>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-1">Pool Info</h3>
-                  <div className="space-y-2 mt-2">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Pool Information</h3>
+                  <div className="bg-gray-50 rounded-lg p-6 space-y-4">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Total Contribution</span>
-                      <span className="text-sm font-medium text-gray-900">$100</span>
+                      <span className="text-sm text-gray-600">Pool ID</span>
+                      <span className="text-sm font-medium text-gray-900">#{pool.id}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Payout Frequency:</span>
-                      <span className="text-sm font-medium text-gray-900">Monthly</span>
+                      <span className="text-sm text-gray-600">Creator</span>
+                      <span className="text-sm font-medium text-gray-900 font-mono">{formatAddress(pool.creator)}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Next Payout:</span>
-                      <span className="text-sm font-medium text-gray-900">October 1, 2025</span>
+                      <span className="text-sm text-gray-600">Contribution Amount</span>
+                      <span className="text-sm font-medium text-gray-900">{formatAmount(pool.contributionAmount)} USDC</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Max Members</span>
+                      <span className="text-sm font-medium text-gray-900">{pool.maxMembers}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Deadline</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {new Date(pool.deadline * 1000).toLocaleDateString()}
+                      </span>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        {activeTab === 'members' && (
-          <div className="mx-5 mt-4">
-            <div 
-              className="rounded-xl p-4"
-              style={{
-                backgroundColor: '#eff6ff',
-                border: '1px solid #d9e3f6'
-              }}
-            >
-              <div className="space-y-3">
-                {members.map((member) => (
-                  <div key={member.id} className="flex items-center justify-between p-3 bg-white rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                        <span className="text-sm font-medium text-blue-600">{member.avatar}</span>
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-900">{member.name}</div>
-                        <div className="text-sm text-gray-600">{member.role}</div>
-                      </div>
-                    </div>
-                    <div className={`px-2 py-1 rounded text-xs font-medium ${
-                      member.status === 'Active' 
-                        ? 'bg-green-100 text-green-600' 
-                        : 'bg-yellow-100 text-yellow-600'
-                    }`}>
-                      {member.status}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'activities' && (
-          <div className="mx-5 mt-4">
-            <div 
-              className="rounded-xl p-4"
-              style={{
-                backgroundColor: '#eff6ff',
-                border: '1px solid #d9e3f6'
-              }}
-            >
-              <div className="space-y-3">
-                {activities.map((activity) => (
-                  <div key={activity.id} className="flex items-center justify-between p-3 bg-white rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        activity.type === 'contribution' ? 'bg-blue-100' :
-                        activity.type === 'joined' ? 'bg-green-100' : 'bg-purple-100'
-                      }`}>
-                        <span className={`text-xs ${
-                          activity.type === 'contribution' ? 'text-blue-600' :
-                          activity.type === 'joined' ? 'text-green-600' : 'text-purple-600'
-                        }`}>
-                          {activity.type === 'contribution' ? '💵' :
-                           activity.type === 'joined' ? '👤' : '💰'}
-                        </span>
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-900">
-                          {activity.type === 'contribution' && `${activity.user} contributed`}
-                          {activity.type === 'joined' && `${activity.user} joined the pool`}
-                          {activity.type === 'payout' && `${activity.user} received payout`}
-                        </div>
-                        <div className="text-sm text-gray-600">{activity.date}</div>
-                      </div>
-                    </div>
-                    {activity.amount && (
-                      <div className="font-medium text-gray-900">{activity.amount}</div>
+            {activeTab === 'members' && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Pool Members</h3>
+                {members.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <p>No members yet</p>
+                    {canContribute && (
+                      <p className="text-sm mt-2">Be the first to contribute!</p>
                     )}
                   </div>
-                ))}
+                ) : (
+                  <div className="space-y-3">
+                    {members.map((memberAddress, index) => (
+                      <div 
+                        key={memberAddress} 
+                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                            <span className="text-sm font-medium text-blue-600">
+                              {memberAddress.slice(2, 4).toUpperCase()}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-900 font-mono text-sm">
+                              {formatAddress(memberAddress)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {memberAddress.toLowerCase() === address?.toLowerCase() ? 'You' : 'Member'}
+                              {memberAddress.toLowerCase() === pool.creator.toLowerCase() && ' • Creator'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {formatAmount(pool.contributionAmount)} USDC
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
-        )}
-      </div>
+            )}
 
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end justify-center z-50">
-          <div className="bg-white rounded-t-xl w-full max-w-sm">
-            <div className="p-5">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Invite Members</h3>
-                <button 
-                  onClick={() => setShowInviteModal(false)}
-                  className="text-2xl text-gray-500"
-                >
-                  ×
-                </button>
-              </div>
-              <div className="space-y-4">
+            {activeTab === 'details' && (
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Invite Link
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={`pool/join/${poolId}`}
-                      readOnly
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm"
-                    />
-                    <button className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm">
-                      Copy
-                    </button>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Pool Status</h3>
+                  <div className="bg-gray-50 rounded-lg p-6 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Active</span>
+                      <span className={`text-sm font-medium ${pool.isActive ? 'text-green-600' : 'text-gray-600'}`}>
+                        {pool.isActive ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Completed</span>
+                      <span className={`text-sm font-medium ${pool.isCompleted ? 'text-green-600' : 'text-gray-600'}`}>
+                        {pool.isCompleted ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Refundable</span>
+                      <span className={`text-sm font-medium ${pool.isRefundable ? 'text-orange-600' : 'text-gray-600'}`}>
+                        {pool.isRefundable ? 'Yes' : 'No'}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setShowInviteModal(false)}
-                  className="w-full py-3 bg-blue-500 text-white rounded-xl font-medium"
-                >
-                  Done
-                </button>
+
+                {pool.hasContributed && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Participation</h3>
+                    <div className="bg-blue-50 rounded-lg p-6 border border-blue-100">
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">Your Contribution</span>
+                          <span className="text-sm font-bold text-blue-600">{pool.userContribution} USDC</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">Status</span>
+                          <span className="text-sm font-medium text-gray-900">
+                            {pool.isCompleted ? 'Eligible for withdrawal' : 'Contributed'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Invite Modal */}
+      <InviteMembersModal
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        poolId={poolId}
+      />
     </div>
   )
 }
+
+
+
+
+
 
