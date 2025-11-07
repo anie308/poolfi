@@ -186,8 +186,8 @@ export default function CreatePoolModal({ isOpen, onClose }: CreatePoolModalProp
             >
               <option value="monthly">Monthly</option>
               <option value="weekly">Weekly</option>
-              <option value="daily">Daily</option>
-              <option value="quarterly">Quarterly</option>
+              {/* <option value="daily">Daily</option> */}
+              {/* <option value="quarterly">Quarterly</option> */}
             </select>
           </div>
 

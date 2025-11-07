@@ -113,7 +113,7 @@ async function fetchPoolInfo(poolId: number): Promise<{
     id: bigint
     creator: string
     name: string
-    deadline: bigint
+    deadline: number
     isActive: boolean
     isCompleted: boolean
     isRefundable: boolean
@@ -172,7 +172,7 @@ async function fetchPoolInfo(poolId: number): Promise<{
         id: basicInfo[0],
         creator: basicInfo[1],
         name: basicInfo[2],
-        deadline: basicInfo[3],
+        deadline: Number(basicInfo[3]), // Convert bigint to number for timestamp
         isActive: basicInfo[4],
         isCompleted: basicInfo[5],
         isRefundable: basicInfo[6] // New field from updated contract
@@ -308,9 +308,12 @@ export function useTokenAllowance() {
     args: address && isContractDeployed ? [address, POOLFI_ADDRESS] : undefined,
   })
 
+  // Ensure allowance is a bigint
+  const allowanceBigInt = typeof allowance === 'bigint' ? allowance : BigInt(0)
+
   return {
-    allowance: allowance || BigInt(0),
-    allowanceFormatted: allowance ? formatUnits(allowance, USDC_DECIMALS) : '0',
+    allowance: allowanceBigInt,
+    allowanceFormatted: allowanceBigInt > BigInt(0) ? formatUnits(allowanceBigInt, USDC_DECIMALS) : '0',
   }
 }
 
@@ -452,8 +455,11 @@ export function useUSDCBalance() {
     args: address ? [address] : undefined,
   })
 
+  // Ensure balance is a bigint
+  const balanceBigInt = typeof balance === 'bigint' ? balance : BigInt(0)
+
   return {
-    balance: balance ? formatUnits(balance, USDC_DECIMALS) : '0',
+    balance: balanceBigInt > BigInt(0) ? formatUnits(balanceBigInt, USDC_DECIMALS) : '0',
     isLoading
   }
 }
