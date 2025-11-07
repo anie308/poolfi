@@ -1,8 +1,39 @@
 import { useState, useEffect } from 'react'
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance } from 'wagmi'
-import { parseEther, formatEther, createPublicClient, http, getContract } from 'viem'
+import { parseUnits, formatUnits, createPublicClient, http, getContract } from 'viem'
 import { PoolManagerABI } from '@/lib/contracts/abi'
-import { POOL_MANAGER_ADDRESS, isContractDeployed } from '@/lib/contracts/contractConfig'
+import { POOL_MANAGER_ADDRESS, isContractDeployed, USDC_ADDRESS, USDC_DECIMALS } from '@/lib/contracts/contractConfig'
+
+// ERC20 ABI for token operations
+const ERC20_ABI = [
+  {
+    constant: true,
+    inputs: [{ name: '_owner', type: 'address' }],
+    name: 'balanceOf',
+    outputs: [{ name: 'balance', type: 'uint256' }],
+    type: 'function',
+  },
+  {
+    constant: false,
+    inputs: [
+      { name: '_spender', type: 'address' },
+      { name: '_value', type: 'uint256' },
+    ],
+    name: 'approve',
+    outputs: [{ name: '', type: 'bool' }],
+    type: 'function',
+  },
+  {
+    constant: true,
+    inputs: [
+      { name: '_owner', type: 'address' },
+      { name: '_spender', type: 'address' },
+    ],
+    name: 'allowance',
+    outputs: [{ name: '', type: 'uint256' }],
+    type: 'function',
+  },
+] as const
 
 // Contract ABI is imported directly from @/lib/contracts/abi
 // After compiling the contract, run: cd contracts && npm run export-abi
@@ -185,14 +216,15 @@ export function useCreatePool() {
     console.log('Creating pool with data:', poolData)
     console.log('Contract address:', POOLFI_ADDRESS)
 
+    // Parse amounts using USDC decimals (6)
     writeContract({
       address: POOLFI_ADDRESS as `0x${string}`,
       abi: PoolManagerABI,
       functionName: 'createPool',
       args: [
         poolData.name,
-        parseEther(poolData.targetAmount),
-        parseEther(poolData.contributionAmount),
+        parseUnits(poolData.targetAmount, USDC_DECIMALS),
+        parseUnits(poolData.contributionAmount, USDC_DECIMALS),
         BigInt(poolData.maxMembers),
         BigInt(poolData.deadline)
       ]
@@ -214,15 +246,18 @@ export function useContribute() {
     hash: data,
   })
 
-  const contribute = (poolId: number, value: string) => {
+  const contribute = (poolId: number, minAmountOut: bigint = BigInt(0)) => {
     if (!isContractDeployed) return
 
+    // Note: User must approve tokens before calling contribute
+    // The frontend should check allowance using useTokenAllowance hook
+    // and call approveToken if needed
+    // minAmountOut: For USDC (stablecoin), 0 is safe. For other tokens, calculate slippage tolerance
     writeContract({
       address: POOLFI_ADDRESS as `0x${string}`,
       abi: PoolManagerABI,
       functionName: 'contribute',
-      args: [BigInt(poolId)],
-      value: parseEther(value)
+      args: [BigInt(poolId), minAmountOut],
     })
   }
 
@@ -230,7 +265,52 @@ export function useContribute() {
     contribute,
     isLoading: isPending || isConfirming,
     isSuccess,
-    error
+    error,
+  }
+}
+
+// Hook for approving USDC tokens
+export function useApproveToken() {
+  const { address } = useAccount()
+  const { writeContract, data, isPending, error } = useWriteContract()
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash: data,
+  })
+
+  const approveToken = (amount: bigint) => {
+    if (!isContractDeployed || !address) return
+
+    writeContract({
+      address: USDC_ADDRESS as `0x${string}`,
+      abi: ERC20_ABI,
+      functionName: 'approve',
+      args: [POOLFI_ADDRESS, amount],
+    })
+  }
+
+  return {
+    approveToken,
+    isLoading: isPending || isConfirming,
+    isSuccess,
+    error,
+  }
+}
+
+// Separate hook for checking token allowance
+export function useTokenAllowance() {
+  const { address } = useAccount()
+  
+  const { data: allowance } = useReadContract({
+    address: USDC_ADDRESS as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: 'allowance',
+    args: address && isContractDeployed ? [address, POOLFI_ADDRESS] : undefined,
+  })
+
+  return {
+    allowance: allowance || BigInt(0),
+    allowanceFormatted: allowance ? formatUnits(allowance, USDC_DECIMALS) : '0',
   }
 }
 
@@ -267,14 +347,15 @@ export function useWithdraw() {
     hash: data,
   })
 
-  const withdraw = (poolId: number) => {
+  const withdraw = (poolId: number, minAmountOut: bigint = BigInt(0)) => {
     if (!isContractDeployed) return
 
+    // minAmountOut: For USDC (stablecoin), 0 is safe. For other tokens, calculate slippage tolerance
     writeContract({
       address: POOLFI_ADDRESS as `0x${string}`,
       abi: PoolManagerABI,
       functionName: 'withdraw',
-      args: [BigInt(poolId)]
+      args: [BigInt(poolId), minAmountOut]
     })
   }
 
@@ -322,14 +403,15 @@ export function useRefund() {
     hash: data,
   })
 
-  const refund = (poolId: number) => {
+  const refund = (poolId: number, minAmountOut: bigint = BigInt(0)) => {
     if (!isContractDeployed) return
 
+    // minAmountOut: For USDC (stablecoin), 0 is safe. For other tokens, calculate slippage tolerance
     writeContract({
       address: POOLFI_ADDRESS as `0x${string}`,
       abi: PoolManagerABI,
       functionName: 'refund',
-      args: [BigInt(poolId)]
+      args: [BigInt(poolId), minAmountOut]
     })
   }
 
@@ -353,22 +435,61 @@ export function useContributionAmount(poolId: number) {
   })
 
   return {
-    amount: amount ? formatEther(amount as bigint) : '0',
+    amount: amount ? formatUnits(amount as bigint, USDC_DECIMALS) : '0',
     isLoading: false
   }
 }
 
-// Hook to get user's CELO token balance from wallet
-export function useCELOBalance() {
+// Hook to get user's USDC token balance from wallet
+export function useUSDCBalance() {
   const { address } = useAccount()
   
-  // Get native CELO balance using useBalance hook from wagmi
-  const { data: balance } = useBalance({
-    address: address,
+  // Get USDC ERC20 token balance
+  const { data: balance, isLoading } = useReadContract({
+    address: USDC_ADDRESS as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
   })
 
   return {
-    balance: balance ? formatEther(balance.value) : '0',
+    balance: balance ? formatUnits(balance, USDC_DECIMALS) : '0',
+    isLoading
+  }
+}
+
+// Legacy hook name for backward compatibility (now returns USDC balance)
+export function useCELOBalance() {
+  return useUSDCBalance()
+}
+
+// Hook to check if contract is paused
+export function useIsPaused() {
+  const { data: isPaused } = useReadContract({
+    address: isContractDeployed ? POOLFI_ADDRESS : undefined,
+    abi: PoolManagerABI,
+    functionName: 'paused',
+  })
+
+  return {
+    isPaused: isPaused || false,
     isLoading: false
+  }
+}
+
+// Hook to get fee information
+export function useFeeInfo() {
+  const { data: feeInfo, isLoading } = useReadContract({
+    address: isContractDeployed ? POOLFI_ADDRESS : undefined,
+    abi: PoolManagerABI,
+    functionName: 'getFeeInfo',
+  })
+
+  return {
+    feeRecipient: feeInfo?.[0] as string | undefined,
+    feeBps: feeInfo?.[1] as bigint | undefined,
+    totalFeesCollected: feeInfo?.[2] as bigint | undefined,
+    feePercentage: feeInfo?.[1] ? Number(feeInfo[1]) / 100 : 0, // Convert basis points to percentage
+    isLoading
   }
 }

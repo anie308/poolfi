@@ -104,12 +104,12 @@ export default function PoolsGrid() {
             <div className="space-y-2.5 mt-4 pt-4 border-t border-gray-100">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-medium text-gray-500">Contribute</span>
-                <span className="text-xs font-bold text-blue-600">{pool.contributionAmount} CELO/month</span>
+                <span className="text-xs font-bold text-blue-600">{pool.contributionAmount} USDC/month</span>
               </div>
               
               <div className="flex justify-between items-center">
                 <span className="text-xs font-medium text-gray-500">Target</span>
-                <span className="text-xs font-bold text-indigo-600">{pool.targetAmount} CELO</span>
+                <span className="text-xs font-bold text-indigo-600">{pool.targetAmount} USDC</span>
               </div>
               
               <div className="flex justify-between items-center">

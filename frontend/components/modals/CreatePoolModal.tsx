@@ -131,14 +131,13 @@ export default function CreatePoolModal({ isOpen, onClose }: CreatePoolModalProp
               className="input-field"
             >
               <option value="safe">Safe Mode</option>
-              <option value="aggressive">Aggressive Mode</option>
               <option value="balanced">Balanced Mode</option>
             </select>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Total Pool (CELO)
+              Total Pool (USDC)
             </label>
             <input
               type="number"
@@ -158,7 +157,7 @@ export default function CreatePoolModal({ isOpen, onClose }: CreatePoolModalProp
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Contribution Amount (CELO)
+              Contribution Amount (USDC)
             </label>
             <input
               type="number"

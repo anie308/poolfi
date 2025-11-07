@@ -1,4 +1,5 @@
-import { formatEther } from 'viem'
+import { formatUnits } from 'viem'
+import { USDC_DECIMALS } from '@/lib/contracts/contractConfig'
 
 // Types for blockchain events
 export interface BlockchainEvent {
@@ -170,7 +171,7 @@ export function formatEventData(event: BlockchainEvent): {
         type: 'contribution',
         title: 'Contribution Made',
         description: `You contributed to pool #${poolId}`,
-        amount: `${formatEther(event.args.amount)} CELO`,
+        amount: `${formatUnits(event.args.amount, USDC_DECIMALS)} USDC`,
         poolId,
         timestamp,
         transactionHash: event.transactionHash
@@ -181,7 +182,7 @@ export function formatEventData(event: BlockchainEvent): {
             type: 'withdrawal',
             title: 'Funds Withdrawn',
             description: `You withdrew from pool #${poolId}`,
-            amount: `${formatEther(event.args.amount)} CELO`,
+            amount: `${formatUnits(event.args.amount, USDC_DECIMALS)} USDC`,
             poolId,
             timestamp,
             transactionHash: event.transactionHash

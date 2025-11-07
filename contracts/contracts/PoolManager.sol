@@ -3,14 +3,34 @@ pragma solidity ^0.8.30;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @title PoolManager
 /// @author PoolFi Team
-/// @notice Manages collaborative savings pools on Celo blockchain
+/// @notice Manages collaborative savings pools on Celo blockchain using ERC20 tokens
 /// @dev Allows users to create pools, contribute funds, and withdraw when goals are reached
-contract PoolManager is ReentrancyGuard, Ownable2Step {
+contract PoolManager is ReentrancyGuard, Ownable2Step, Pausable {
+    using SafeERC20 for IERC20;
+    
     /// @notice Minimum time before deadline when contributions are allowed (prevents front-running)
     uint256 private constant MIN_CONTRIBUTION_TIME_BEFORE_DEADLINE = 1 hours;
+    
+    /// @notice Maximum fee percentage (10000 = 100%, using basis points)
+    uint256 private constant MAX_FEE_BPS = 1000; // 10%
+    
+    /// @notice The ERC20 token used for all pool operations
+    IERC20 public immutable token;
+    
+    /// @notice Fee recipient address (where fees are sent)
+    address public feeRecipient;
+    
+    /// @notice Fee percentage in basis points (e.g., 100 = 1%)
+    uint256 public feeBps; // Basis points (10000 = 100%)
+    
+    /// @notice Total fees collected
+    uint256 public totalFeesCollected;
     
     /// @notice Pool structure for managing savings pools
     struct Pool {
@@ -38,9 +58,17 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
     /// @notice Mapping from user address to array of pool IDs they're involved in
     mapping(address => uint256[]) public userPools;
 
-    /// @notice Constructor sets the initial owner
+    /// @notice Constructor sets the initial owner and token address
+    /// @param _token Address of the ERC20 token to use for pools (e.g., USDC)
+    /// @param _feeRecipient Address to receive fees (can be zero address for no fees)
+    /// @param _feeBps Fee percentage in basis points (e.g., 100 = 1%, 0 = no fees)
     /// @dev Emits ownership transfer event
-    constructor() payable Ownable(msg.sender) {
+    constructor(address _token, address _feeRecipient, uint256 _feeBps) Ownable(msg.sender) {
+        require(_token != address(0), "Invalid token address");
+        require(_feeBps <= MAX_FEE_BPS, "Fee too high");
+        token = IERC20(_token);
+        feeRecipient = _feeRecipient;
+        feeBps = _feeBps;
     }
 
     /// @notice Emitted when a new pool is created
@@ -78,6 +106,16 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
         address indexed contributor,
         uint256 amount
     );
+    
+    event FeeCollected(
+        uint256 indexed poolId,
+        uint256 amount,
+        address indexed recipient
+    );
+    
+    event FeeRecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
+    
+    event FeeBpsUpdated(uint256 oldFeeBps, uint256 newFeeBps);
 
     /// @notice Modifier to validate pool exists and is active
     /// @param _poolId Pool ID to validate
@@ -99,8 +137,8 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
 
     /// @notice Create a new savings pool
     /// @param _name Name of the pool
-    /// @param _targetAmount Target amount to reach (in wei)
-    /// @param _contributionAmount Amount each member should contribute (in wei)
+    /// @param _targetAmount Target amount to reach (in token units)
+    /// @param _contributionAmount Amount each member should contribute (in token units)
     /// @param _maxMembers Maximum number of members allowed
     /// @param _deadline Deadline timestamp (Unix timestamp)
     function createPool(
@@ -109,7 +147,7 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
         uint256 _contributionAmount,
         uint256 _maxMembers,
         uint256 _deadline
-    ) public {
+    ) public whenNotPaused {
         require(msg.sender != address(0), "Invalid sender");
         require(bytes(_name).length != 0, "Name required");
         require(_targetAmount != 0, "Target > 0");
@@ -149,13 +187,15 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
 
     /// @notice Contribute to a pool
     /// @param _poolId ID of the pool to contribute to
+    /// @param _minAmountOut Minimum amount expected (for slippage protection, can be 0 for USDC)
     /// @notice Prevents front-running by requiring contributions at least 1 hour before deadline
-    function contribute(uint256 _poolId) public payable validPool(_poolId) {
+    /// @notice User must approve this contract to spend tokens before calling this function
+    function contribute(uint256 _poolId, uint256 _minAmountOut) public whenNotPaused validPool(_poolId) {
         require(msg.sender != address(0), "Invalid sender");
-        require(msg.value != 0, "Contrib > 0");
         
         Pool storage pool = pools[_poolId];
         uint48 poolDeadline = pool.deadline;
+        uint256 contributionAmount = pool.contributionAmount;
 
         require(block.timestamp < poolDeadline, "Deadline passed");
         require(
@@ -165,12 +205,38 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
         require(!pool.isCompleted, "Completed");
         require(!pool.isRefundable, "Refundable");
         require(pool.currentMembers < pool.maxMembers, "Max members");
-        require(msg.value == pool.contributionAmount, "Amount mismatch");
+        require(contributionAmount > 0, "Contrib > 0");
         require(!pool.contributors[msg.sender], "Already contributed");
+        
+        // Slippage protection: ensure we receive at least the minimum expected amount
+        // For stablecoins like USDC, this is typically not needed but provides extra safety
+        require(contributionAmount >= _minAmountOut, "Slippage too high");
 
-        pool.currentAmount += msg.value;
+        // Transfer tokens from user to contract
+        uint256 balanceBefore = token.balanceOf(address(this));
+        token.safeTransferFrom(msg.sender, address(this), contributionAmount);
+        uint256 balanceAfter = token.balanceOf(address(this));
+        uint256 actualReceived = balanceAfter - balanceBefore;
+        
+        // Verify we received the expected amount (slippage protection)
+        require(actualReceived >= _minAmountOut, "Insufficient tokens received");
+        require(actualReceived == contributionAmount, "Amount mismatch");
+
+        // Calculate and collect fee if applicable
+        uint256 feeAmount = 0;
+        if (feeBps > 0 && feeRecipient != address(0)) {
+            feeAmount = (contributionAmount * feeBps) / 10000;
+            if (feeAmount > 0) {
+                totalFeesCollected += feeAmount;
+                token.safeTransfer(feeRecipient, feeAmount);
+                emit FeeCollected(_poolId, feeAmount, feeRecipient);
+            }
+        }
+        
+        uint256 amountAfterFee = contributionAmount - feeAmount;
+        pool.currentAmount += amountAfterFee;
         pool.contributors[msg.sender] = true;
-        pool.contributions[msg.sender] = msg.value; // Track individual contribution
+        pool.contributions[msg.sender] = contributionAmount; // Track individual contribution
         pool.memberList.push(msg.sender);
         pool.currentMembers++;
 
@@ -179,7 +245,7 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
         emit ContributionMade(
             _poolId,
             msg.sender,
-            msg.value,
+            amountAfterFee,
             pool.currentAmount
         );
 
@@ -193,8 +259,9 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
 
     /// @notice Withdraw funds from a completed pool
     /// @param _poolId ID of the pool to withdraw from
+    /// @param _minAmountOut Minimum amount expected (for slippage protection, can be 0 for USDC)
     /// @notice Protected against reentrancy attacks
-    function withdraw(uint256 _poolId) public nonReentrant {
+    function withdraw(uint256 _poolId, uint256 _minAmountOut) public nonReentrant whenNotPaused {
         require(msg.sender != address(0), "Invalid sender");
         require(_poolId != 0 && _poolId <= poolCount, "Pool exists");
         Pool storage pool = pools[_poolId];
@@ -204,6 +271,7 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
 
         uint256 amount = pool.contributions[msg.sender];
         require(amount != 0, "No funds");
+        require(amount >= _minAmountOut, "Slippage too high");
         
         // Update state before external call (Checks-Effects-Interactions pattern)
         pool.contributors[msg.sender] = false;
@@ -211,8 +279,14 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
         pool.currentAmount -= amount;
 
         address recipient = msg.sender;
-        (bool success, ) = recipient.call{value: amount}("");
-        require(success, "Transfer failed");
+        // Transfer ERC20 tokens to recipient
+        uint256 balanceBefore = token.balanceOf(recipient);
+        token.safeTransfer(recipient, amount);
+        uint256 balanceAfter = token.balanceOf(recipient);
+        uint256 actualReceived = balanceAfter - balanceBefore;
+        
+        // Verify recipient received the expected amount
+        require(actualReceived >= _minAmountOut, "Insufficient tokens received");
 
         emit FundsWithdrawn(_poolId, recipient, amount);
     }
@@ -255,8 +329,9 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
     
     /// @notice Refund contribution from a failed pool
     /// @param _poolId ID of the pool to get refund from
+    /// @param _minAmountOut Minimum amount expected (for slippage protection, can be 0 for USDC)
     /// @notice Protected against reentrancy attacks
-    function refund(uint256 _poolId) public nonReentrant {
+    function refund(uint256 _poolId, uint256 _minAmountOut) public nonReentrant whenNotPaused {
         require(msg.sender != address(0), "Invalid sender");
         require(_poolId != 0 && _poolId <= poolCount, "Pool exists");
         Pool storage pool = pools[_poolId];
@@ -266,6 +341,7 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
         
         uint256 amount = pool.contributions[msg.sender];
         require(amount != 0, "No funds");
+        require(amount >= _minAmountOut, "Slippage too high");
         
         // Update state before external call (Checks-Effects-Interactions pattern)
         pool.contributors[msg.sender] = false;
@@ -274,8 +350,14 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
         pool.currentMembers--;
         
         address recipient = msg.sender;
-        (bool success, ) = recipient.call{value: amount}("");
-        require(success, "Transfer failed");
+        // Transfer ERC20 tokens to recipient
+        uint256 balanceBefore = token.balanceOf(recipient);
+        token.safeTransfer(recipient, amount);
+        uint256 balanceAfter = token.balanceOf(recipient);
+        uint256 actualReceived = balanceAfter - balanceBefore;
+        
+        // Verify recipient received the expected amount
+        require(actualReceived >= _minAmountOut, "Insufficient tokens received");
         
         emit RefundIssued(_poolId, recipient, amount);
     }
@@ -530,7 +612,7 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
     /// @notice Only contract owner can call this function. Requires time-lock period.
     /// @dev Emits event for transparency and tracks all emergency withdrawals
     function emergencyWithdraw() public nonReentrant onlyOwner {
-        uint256 balance = address(this).balance;
+        uint256 balance = token.balanceOf(address(this));
         require(balance != 0, "No funds");
         
         // Time-lock check: ensure request was made and delay has passed
@@ -580,8 +662,8 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
         emergencyWithdrawals[_withdrawCount].timestamp = block.timestamp;
         emergencyWithdrawals[_withdrawCount].recipient = _owner;
         
-        (bool success, ) = _owner.call{value: balance}("");
-        require(success, "Transfer failed");
+        // Transfer ERC20 tokens to owner
+        token.safeTransfer(_owner, balance);
         
         emit EmergencyWithdrawExecuted(_withdrawCount, _owner, balance);
     }
@@ -606,13 +688,13 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
     }
     
     /// @notice Receive function to handle direct ETH transfers
-    /// @notice Reverts to prevent accidental ETH deposits
+    /// @notice Reverts to prevent accidental ETH deposits (contract uses ERC20 tokens)
     receive() external payable {
         revert("Direct ETH not allowed");
     }
     
     /// @notice Fallback function to handle unknown function calls
-    /// @notice Reverts to prevent accidental ETH deposits
+    /// @notice Reverts to prevent accidental ETH deposits (contract uses ERC20 tokens)
     fallback() external payable {
         revert("Function not found");
     }
@@ -629,6 +711,52 @@ contract PoolManager is ReentrancyGuard, Ownable2Step {
             return 0;
         }
         unlockTime = requestTime + EMERGENCY_WITHDRAW_DELAY;
+    }
+    
+    // ============ Pause Functions ============
+    
+    /// @notice Pause the contract (owner only)
+    /// @notice Prevents new pool creation, contributions, withdrawals, and refunds
+    /// @notice Existing pools remain accessible for viewing
+    function pause() public onlyOwner {
+        _pause();
+    }
+    
+    /// @notice Unpause the contract (owner only)
+    function unpause() public onlyOwner {
+        _unpause();
+    }
+    
+    // ============ Fee Management Functions ============
+    
+    /// @notice Update the fee recipient address (owner only)
+    /// @param _newFeeRecipient New address to receive fees (can be zero address to disable fees)
+    function setFeeRecipient(address _newFeeRecipient) public onlyOwner {
+        address oldRecipient = feeRecipient;
+        feeRecipient = _newFeeRecipient;
+        emit FeeRecipientUpdated(oldRecipient, _newFeeRecipient);
+    }
+    
+    /// @notice Update the fee percentage (owner only)
+    /// @param _newFeeBps New fee percentage in basis points (e.g., 100 = 1%)
+    /// @notice Maximum fee is 10% (1000 basis points)
+    function setFeeBps(uint256 _newFeeBps) public onlyOwner {
+        require(_newFeeBps <= MAX_FEE_BPS, "Fee too high");
+        uint256 oldFeeBps = feeBps;
+        feeBps = _newFeeBps;
+        emit FeeBpsUpdated(oldFeeBps, _newFeeBps);
+    }
+    
+    /// @notice Get current fee configuration
+    /// @return _feeRecipient Current fee recipient address
+    /// @return _feeBps Current fee in basis points
+    /// @return _totalFeesCollected Total fees collected since deployment
+    function getFeeInfo() public view returns (
+        address _feeRecipient,
+        uint256 _feeBps,
+        uint256 _totalFeesCollected
+    ) {
+        return (feeRecipient, feeBps, totalFeesCollected);
     }
 }
 

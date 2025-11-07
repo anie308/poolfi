@@ -1,10 +1,12 @@
 'use client'
 
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { useAccount, useBalance, useChainId } from 'wagmi'
+import { useAccount, useChainId } from 'wagmi'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { isCeloChain, getCeloChainInfo } from '@/lib/celo-config'
+import { useUSDCBalance } from '@/hooks/usePoolManager'
+import { USDC_DECIMALS } from '@/lib/contracts/contractConfig'
 
 interface WalletCardProps {
   isDesktop?: boolean
@@ -14,9 +16,7 @@ interface WalletCardProps {
 export default function WalletCard({ isDesktop = false, onFundWallet }: WalletCardProps) {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
-  const { data: balance } = useBalance({
-    address: address,
-  })
+  const { balance: usdcBalance, isLoading: isLoadingBalance } = useUSDCBalance()
   const [copied, setCopied] = useState(false)
   
   const formatAddress = (addr: string) => {
@@ -42,10 +42,10 @@ export default function WalletCard({ isDesktop = false, onFundWallet }: WalletCa
     }
   }
 
-  const formatBalance = (balance: bigint | undefined, decimals: number = 18) => {
+  const formatBalance = (balance: string | undefined) => {
     if (!balance) return '0.00'
-    const formatted = (Number(balance) / Math.pow(10, decimals)).toFixed(4)
-    return formatted
+    const num = parseFloat(balance)
+    return isNaN(num) ? '0.00' : num.toFixed(4)
   }
 
   const getChainInfo = (chainId: number) => {
@@ -160,12 +160,12 @@ export default function WalletCard({ isDesktop = false, onFundWallet }: WalletCa
       </div>
       
       <div className="text-3xl font-bold mb-2 tracking-tight">
-        {isConnected && balance ? (
+        {isConnected && !isLoadingBalance && usdcBalance ? (
           <div className="flex items-center gap-2">
-            <span>{formatBalance(balance.value)} <span className="text-xl font-semibold opacity-90">CELO</span></span>
+            <span>{formatBalance(usdcBalance)} <span className="text-xl font-semibold opacity-90">USDC</span></span>
           </div>
         ) : (
-          <span>0.00 <span className="text-xl font-semibold opacity-90">CELO</span></span>
+          <span>0.00 <span className="text-xl font-semibold opacity-90">USDC</span></span>
         )}
       </div>
       
